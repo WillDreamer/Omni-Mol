@@ -5,7 +5,7 @@ from huggingface_hub import snapshot_download
 cache_dir = '/root/.cache/huggingface'
 
 
-repo_id = "MillenniumHL/omnimol"
+repo_id = "Omni-Mol/omnimol-data"
 if not os.path.exists("./data"):
     os.makedirs("./data")
 local_dir = "./data/"
@@ -27,7 +27,7 @@ if os.listdir(local_dir) == []:
             print('Data downloaded')
             break
 
-repo_id = "MillenniumHL/omnimol-ckpts"
+repo_id = "Omni-Mol/omnimol-ckpt"
 if not os.path.exists("./assets"):
     os.makedirs("./assets")
 local_dir = "./assets"
