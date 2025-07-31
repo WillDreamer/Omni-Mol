@@ -208,7 +208,7 @@ Please claim the task for evaluation in `TASK_MAP', and the evaluation mode in `
 
 ## 😈 Text-Chem T5 Re-implementaion
 
-All of our reproduction details are provided under the `TextChemT5-reimplement` directory, including log files (`TextChemT5-reimplement/logs`) and model profiles (containing activation and model parameter information in `TextChemT5-reimplement/model/model_profile.json`). For more information, please refer to the `TextChemT5-reimplement/README.md'.
+All of our reproduction details are provided under the `TextChemT5-reimplement` directory (i.e., `TextChemT5-v0-main`), including log files (`TextChemT5-reimplement/logs`) and model profiles (containing activation and model parameter information in `TextChemT5-reimplement/model/model_profile.json`). For more information, please refer to the `TextChemT5-reimplement/README.md`.
 
 
 
