@@ -50,6 +50,10 @@ bash setup_omnimol.sh
 We provide the checkpoints of Omni-Mol reported in main table, please just xxxx
 
 ## Dataset
+
+### Data Download
+We have also provided compressed packages of all our training and testing data, which can be found in the `assets/train.zip` and `assets/evaluate.zip` folder.
+
 ### Task list
 - "forward"
 - "reagent"
