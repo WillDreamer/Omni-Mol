@@ -1,6 +1,5 @@
-# [Omni-Mol: Exploring Universal Convergent Space for Omni-Molecular Tasks](https://arxiv.org/abs/2502.01074)
+# [Omni-Mol: Multitask Molecular Model for Any-to-any Modalities]
 
-Code release for paper *Omni-Mol: Exploring Universal Convergent Space for Omni-Molecular Tasks*
 
 ## Release
 
