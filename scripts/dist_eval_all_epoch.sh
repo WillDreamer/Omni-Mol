@@ -3,9 +3,9 @@
 
 TYPE="loramoe"
 PROMPT="llama3"
-BACKBONE="/wanghaixin/OmniMol/checkpoints/Llama-3.2-1B-Instruct"
+BACKBONE="meta-llama/Llama-3.2-1B-Instruct"
 GRAPH_TOWER="moleculestm"
-GRAPH_PATH="/wanghaixin/OmniMol/checkpoints/moleculestm.pth"
+GRAPH_PATH="assets/moleculestm.pth"
 BATCH_SIZE=1
 DTYPE="bfloat16"
 DEVICE="cuda"
