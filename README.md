@@ -1,12 +1,11 @@
-# [Omni-Mol: Exploring Universal Convergent Space for Omni-Molecular Tasks](https://arxiv.org/abs/2502.01074)
+# Omni-Mol: Multitask Molecular Model for Any-to-any Modalities
 
-Code release for paper *Omni-Mol: Exploring Universal Convergent Space for Omni-Molecular Tasks*
 
 ## Release
 
 [2025/07/28] 🔥 We release our first version of code
 
-## Environment Setup
+## 🌍 Environment Setup
 1. Clone the repository and `cd` to the folder
 
 ```bash
@@ -46,10 +45,17 @@ bash setup_conda.sh
 bash setup_omnimol.sh
 ```
 
-## Weights
+## 🚀 Weights
 We provide the checkpoints of Omni-Mol reported in main table, you can find it in `assets/ckpt-omnimol.zip` folder.
 
-## Dataset
+It should be noted that since the data and weisghts are large in `assets`, please download the file with:
+
+```bash
+git lfs install
+git lfs clone xxx
+```
+
+## 📊 Dataset
 
 ### Data Download
 We have also provided compressed packages of all our training and testing data, which can be found in the `assets/train.zip` and `assets/evaluate.zip` folder.
@@ -79,7 +85,7 @@ The default setting for `--task_config' is:
 ```
 
 
-## Train
+## 🔥 Train
 ### Stage 1: Pre-training of Multi-modal Projector (Optional) 
 
 ```bash
@@ -170,7 +176,7 @@ MODEL_STAGE_MAP = {
 
 More details can be found in `args.py'.
 
-## Evaluation
+## 🌟 Evaluation
 
 We support the auto evaluation after training in 
 
@@ -192,7 +198,7 @@ bash scripts/dist_eval_all_epoch.sh
 
 Please claim the task for evaluation in `TASK_MAP', and the evaluation mode in `MODEL_LOADER_MAP' with `--model_type' in scripts.
 
-## Text-Chem T5 Re-implementaion
+## 😈 Text-Chem T5 Re-implementaion
 
 All of our reproduction details are provided under the `TextChemT5-reimplement` directory, including log files (`TextChemT5-reimplement/logs`) and model profiles (containing activation and model parameter information in `TextChemT5-reimplement/model/model_profile.json`). For more information, please refer to the `TextChemT5-reimplement/README.md'.
 
