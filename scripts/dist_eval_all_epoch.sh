@@ -19,8 +19,8 @@ IS_TRAINING=False
 SEED=42
 
 
-EPOCH_LIST=(11 12 13 14 15)
-CHECKPOINT_LIST=(154902 168984 183066 197148 211230)
+EPOCH_LIST=(14)
+CHECKPOINT_LIST=(197148)
 
 
 TASK_LIST=(
@@ -47,7 +47,7 @@ for i in "${!EPOCH_LIST[@]}"; do
     CKPT=${CHECKPOINT_LIST[$i]}
 
     BASE_REMARK="llama-1B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-16tasks-seed${SEED}-temp${TEMPERATURE}-Epoch${EPOCH}"
-    MODEL_BASE_PATH="_checkpoints/moe/llama-1B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-16tasks/checkpoint-${CKPT}"
+    MODEL_BASE_PATH="_checkpoints/checkpoint-${CKPT}"
 
     for TASK in "${TASK_LIST[@]}"; do
         case "$TASK" in
