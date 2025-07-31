@@ -56,6 +56,8 @@ git submodule update
 ## 🚀 Weights
 We provide the checkpoints of Omni-Mol reported in main table, you can find all of the files in the anonymous Huggingface repo: https://huggingface.co/datasets/Omni-Mol/omnimol-ckpt.
 
+All of our default setting can be found in `checkpoint-197148/config.json`.
+
 ## 📊 Dataset
 
 ### Data Download
