@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# ------------------------
-# 可自定义的固定参数
-# ------------------------
+
 TYPE="loramoe"
 PROMPT="llama3"
 BACKBONE="/wanghaixin/OmniMol/checkpoints/Llama-3.2-1B-Instruct"
@@ -20,15 +18,11 @@ ADD_SELFIES=True
 IS_TRAINING=False
 SEED=42
 
-# ------------------------
-# ******可变 epoch 和 checkpoint 列表********
-# ------------------------
+
 EPOCH_LIST=(11 12 13 14 15)
 CHECKPOINT_LIST=(154902 168984 183066 197148 211230)
 
-# ------------------------
-# TASK 列表
-# ------------------------
+
 TASK_LIST=(
      "forward"
      "reagent"
@@ -48,9 +42,6 @@ TASK_LIST=(
     "textguidedmolgen"
 )
 
-# ------------------------
-# 双重循环：遍历 epoch-checkpoint 和任务, 修改BASE_REMARK和MODEL_BASE_PATH
-# ------------------------
 for i in "${!EPOCH_LIST[@]}"; do
     EPOCH=${EPOCH_LIST[$i]}
     CKPT=${CHECKPOINT_LIST[$i]}
@@ -60,22 +51,22 @@ for i in "${!EPOCH_LIST[@]}"; do
 
     for TASK in "${TASK_LIST[@]}"; do
         case "$TASK" in
-            "forward") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/forward_reaction_prediction.json" ;;
-            "reagent") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/reagent_prediction.json" ;;
-            "retrosynthesis") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/retrosynthesis.json" ;;
-            "homolumo") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/property_prediction.json" ;;
-            "molcap") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/molcap_test.json" ;;
-            "solvent") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/solvent_pred.json" ;;
-            "catalyst") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/catalyst_pred.json" ;;
-            "yield_BH") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/yields_regression_BH.json" ;;
-            "yield_SM") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/yields_regression_SM.json" ;;
-            "iupac") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/iupac2selfies.json" ;;
-            "molediting") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/molecule_editing.json" ;;
-            "textguidedmolgen") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/text_guided_mol_generation.json" ;;
+            "forward") DATA_PATH="data/evaluate/forward_reaction_prediction.json" ;;
+            "reagent") DATA_PATH="data/evaluate/reagent_prediction.json" ;;
+            "retrosynthesis") DATA_PATH="data/evaluate/retrosynthesis.json" ;;
+            "homolumo") DATA_PATH="data/evaluate/property_prediction.json" ;;
+            "molcap") DATA_PATH="data/evaluate/molcap_test.json" ;;
+            "solvent") DATA_PATH="data/evaluate/solvent_pred.json" ;;
+            "catalyst") DATA_PATH="data/evaluate/catalyst_pred.json" ;;
+            "yield_BH") DATA_PATH="data/evaluate/yields_regression_BH.json" ;;
+            "yield_SM") DATA_PATH="data/evaluate/yields_regression_SM.json" ;;
+            "iupac") DATA_PATH="data/evaluate/iupac2selfies.json" ;;
+            "molediting") DATA_PATH="data/evaluate/molecule_editing.json" ;;
+            "textguidedmolgen") DATA_PATH="data/evaluate/text_guided_mol_generation.json" ;;
             "dqa"|"scf"|"logp"|"weight"|"tpsa"|"complexity")
-                DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/3d_moit_no_homolumo_filtered_test.json"
+                DATA_PATH="data/evaluate/3d_moit_no_homolumo_filtered_test.json"
                 ;;
-            "experiment") DATA_PATH="/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/exp_procedure_pred.json" ;;
+            "experiment") DATA_PATH="dta/evaluate/exp_procedure_pred.json" ;;
             *) echo "Warning: Unknown TASK: $TASK"; continue ;;
         esac
 
@@ -86,8 +77,8 @@ for i in "${!EPOCH_LIST[@]}"; do
             MODEL_REMARK=$REMARK
         fi
 
-        PPP_PATH="/wanghaixin/OmniMol/eval_result/save_all_tasks/${BASE_REMARK}/${TASK}-${TYPE}-${PROMPT}-answer.json"
-        METRIC_PATH="/wanghaixin/OmniMol/eval_result/save_all_tasks_metric/${BASE_REMARK}/${TASK}-${TYPE}-${PROMPT}-metric.json"
+        PPP_PATH="eval_result/save_all_tasks/${BASE_REMARK}/${TASK}-${TYPE}-${PROMPT}-answer.json"
+        METRIC_PATH="eval_result/save_all_tasks_metric/${BASE_REMARK}/${TASK}-${TYPE}-${PROMPT}-metric.json"
 
         echo "--------------------------------------"
         echo "Epoch:                $EPOCH"
@@ -99,7 +90,7 @@ for i in "${!EPOCH_LIST[@]}"; do
         echo "Output file:          $PPP_PATH"
         echo "--------------------------------------"
 
-        /root/anaconda3/bin/accelerate launch --main_process_port 29519 eval_engine.py \
+        accelerate launch --main_process_port 29519 eval_engine.py \
             --model_type "$TYPE" \
             --task "$TASK" \
             --model_path "$MODEL_BASE_PATH" \
