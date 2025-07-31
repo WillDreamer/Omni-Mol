@@ -54,19 +54,12 @@ git submodule update
 ```
 
 ## 🚀 Weights
-We provide the checkpoints of Omni-Mol reported in main table, you can find it in `assets/ckpt-omnimol.zip` folder.
-
-It should be noted that since the data and weisghts are large in `assets`, please download the file with:
-
-```bash
-git lfs install
-git lfs clone xxx
-```
+We provide the checkpoints of Omni-Mol reported in main table, you can find all of the files in the anonymous Huggingface repo: https://huggingface.co/datasets/Omni-Mol/omnimol-ckpt.
 
 ## 📊 Dataset
 
 ### Data Download
-We have also provided compressed packages of all our training and testing data, which can be found in the `assets/train.zip` and `assets/evaluate.zip` folder.
+We have also provided compressed packages of all our training and testing data, you can find all of the files in the anonymous Huggingface repo: https://huggingface.co/datasets/Omni-Mol/omnimol-data.
 
 ### Task list
 - "forward"
@@ -198,7 +191,7 @@ We also support separate evaluation with distributed inference
 bash scripts/dist_eval_all_epoch.sh
 ```
 
-For example, after unzipping `assets/ckpt-omnimol.zip`, create a new directory named `_checkpoints` and rename the extracted folder from `ckpt-omnimol` to `checkpoint-197148`. Make sure to set the correct path to the evaluation data on your system. You can then run the following commands directly to reproduce our results. Here, `197148` refers to the training step at which the checkpoint was saved.
+For example, after downloading `checkpoint-197148` in https://huggingface.co/Omni-Mol/omnimol-ckpt, please set the correct path to the evaluation data on your system. You can then run the following commands directly to reproduce our results. Here, `197148` refers to the training step at which the checkpoint was saved.
 
 ```bash
 bash scripts/dist_eval_all_epoch.sh
