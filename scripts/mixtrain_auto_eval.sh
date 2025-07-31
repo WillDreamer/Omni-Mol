@@ -19,7 +19,7 @@ REMARK="1B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-8tasks"
 
 export WANDB_ENTITY="Omni-Mol"
 export WANDB_PROJECT="${WANDB_ENTITY}_${WANDB_PROMPT_VERSION}"
-export WANDB_API_KEY="ba70fcbc92808cc7a1750dd80ac3908295e6854f"
+export WANDB_API_KEY="xxxxxx"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 echo "========== Start Training =========="
