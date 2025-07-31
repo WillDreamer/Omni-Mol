@@ -1,3 +1,5 @@
 assets/ckpt-omnimol.zip filter=lfs diff=lfs merge=lfs -text
 assets/train.zip filter=lfs diff=lfs merge=lfs -text
 assets/evaluate.zip filter=lfs diff=lfs merge=lfs -text
+assets/moleculestm.pth filter=lfs diff=lfs merge=lfs -text
+assets/mm_projector.bin filter=lfs diff=lfs merge=lfs -text
