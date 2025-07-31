@@ -1,4 +1,4 @@
-# [Omni-Mol: Multitask Molecular Model for Any-to-any Modalities]
+# Omni-Mol: Multitask Molecular Model for Any-to-any Modalities
 
 
 ## Release
