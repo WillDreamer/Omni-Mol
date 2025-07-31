@@ -45,6 +45,14 @@ bash setup_conda.sh
 bash setup_omnimol.sh
 ```
 
+4. If you download this repo from Anonymous GitHub, you may lack git submodule `peft`, you can add it by
+
+```bash
+git submodule add https://github.com/WillDreamer/peft.git peft
+git submodule init
+git submodule update
+```
+
 ## 🚀 Weights
 We provide the checkpoints of Omni-Mol reported in main table, you can find it in `assets/ckpt-omnimol.zip` folder.
 
