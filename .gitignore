@@ -1,0 +1,11 @@
+/__pycache__
+/_checkpoints
+/checkpoints
+/eval_result
+/data
+/tf-logs
+*/__pycache__
+/wandb
+/In-context/*_answer.json
+/temp.ipynb
+/assets
