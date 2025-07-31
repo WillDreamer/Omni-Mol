@@ -47,7 +47,7 @@ bash setup_omnimol.sh
 ```
 
 ## Weights
-We provide the checkpoints of Omni-Mol reported in main table, please just xxxx
+We provide the checkpoints of Omni-Mol reported in main table, you can find it in `assets/ckpt-omnimol.zip` folder.
 
 ## Dataset
 
