@@ -4,14 +4,6 @@ Code release for paper *Omni-Mol: Exploring Universal Convergent Space for Omni-
 
 ## Release
 
-- [ ] OOD任务选取
-- [ ] 去掉AGI-Clip
-- [ ] AGI不同rank
-- [ ] 8个task的baseline
-- [ ] 自动化测试脚本
-- [x] 纯text训练开发
-- [x] 环境一键配置
-
 [2025/07/28] 🔥 We release our first version of code
 
 ## Environment Setup
