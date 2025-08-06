@@ -8,14 +8,14 @@ import torch
 import pandas as pd
 import random
 import os
+import numpy as np
 from data_pipe.mol_utils import smiles2graph
 from loggers import WrappedLogger
 from collections import OrderedDict
 from data_pipe.data_utils import GraphDatasetCollator
 from data_pipe import conversation_lib
 import re
-import selfies as sf
-from rdkit import Chem
+from scipy.spatial import distance_matrix
 logger = WrappedLogger(__name__)
 
 def check_output(
@@ -26,7 +26,8 @@ def check_output(
     ids = list(input_ids.detach().numpy())
     logger.info(f"ids: {ids}")
     logger.info(f"labels {labels}")
-    ids.remove(-200)
+    if -200 in ids:
+        ids.remove(-200)
     logger.info([tokenizer.decode(ids)])
     
 
@@ -40,28 +41,6 @@ def apply_prompt(message):
     return prompt
 
 
-def convert_selfies_to_smiles(input_str):
-    def replace_selfies(match):
-        # 提取 SELFIES 字符串
-        selfies_str = match.group(1)
-        # 将 SELFIES 转换为 SMILES
-        smiles = sf.decoder(selfies_str)
-        if smiles:
-            # 将 SMILES 转换为 RDKit 分子对象
-            mol = Chem.MolFromSmiles(smiles)
-            if mol:
-                # 生成 canonical SMILES
-                canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
-                return f'[START_SMILES]{canonical_smiles}[END_SMILES]'
-        # 如果转换失败，保持原样
-        return match.group(0)
-    
-    # 定义正则表达式模式，匹配 [START_SELFIES] 和 [END_SELFIES] 之间的内容
-    pattern = r'\[START_SELFIES\](.*?)\[END_SELFIES\]'
-    # 替换所有匹配项
-    modified_str = re.sub(pattern, replace_selfies, input_str)
-    return modified_str
-
 class MetaGraphDataset(Dataset):
     def __init__(
         self, 
@@ -69,8 +48,7 @@ class MetaGraphDataset(Dataset):
         tokenizer: PreTrainedTokenizer,
         for_test: bool,
         task_name: str,
-        data_file: list[dict] = None,
-        if_smiles: bool = False
+        data_file: list[dict] = None
     ) -> None:
         super().__init__()
         if data_file is None:
@@ -79,10 +57,17 @@ class MetaGraphDataset(Dataset):
                 f.close()
         else:
             self.list_data_dict = data_file
+        
+        # self.max_atoms = max_atoms
+        ## the following is the default setting of uni-mol's pretrained weights
+        self.remove_hydrogen = True
+        self.remove_polar_hydrogen = False
+        self.normalize_coords = True
+        self.add_special_token = True
+        self.__max_atoms = 512
 
         self.tokenizer = tokenizer
         self.task_name = task_name
-        self.if_smiles = if_smiles
         logger.info(f"Task \033[34m{task_name}\033[0m\t Total number of samples: {self.__len__()}", on_rank0=True)
         if for_test:
             self.filter_for_test()
@@ -92,17 +77,54 @@ class MetaGraphDataset(Dataset):
             logger.info(f"Filtered {self.__len__()} for training", on_rank0=True)
         
     def selfies2smiles(self, selfies_str: str) -> str | None:
-    
-        # 第一步：SELFIES 转为 SMILES
-        smiles = sf.decoder(selfies_str)
-        if not smiles:  # 检查是否解码失败
-            return None
-        # 第二步：SMILES 转为 canonical SMILES
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:  # 检查 RDKit 是否解析失败
-            return smiles
-        return Chem.MolToSmiles(mol, canonical=True)  # 返回 canonical SMILES
+        try:
+            smiles_str = selfies.decoder(selfies_str)
+        except:
+            smiles_str = None
             
+        return smiles_str
+    
+    def selfies2_3dgraph(self, raw: dict) -> torch.Tensor | None:
+        atoms = raw['atoms']
+        coordinates = raw['coordinates']
+        """
+        此处的atoms为字符串列表, coordinates为numpy数组
+        """
+        assert len(atoms) == len(coordinates) and len(atoms) > 0
+        assert coordinates.shape[1] == 3
+
+        if self.remove_hydrogen:
+            mask_hydrogen = atoms != "H"
+            if sum(mask_hydrogen) > 0:
+                atoms = atoms[mask_hydrogen]
+                coordinates = coordinates[mask_hydrogen]
+
+        if not self.remove_hydrogen and self.remove_polar_hydrogen:
+            end_idx = 0
+            for i, atom in enumerate(atoms[::-1]):
+                if atom != "H":
+                    break
+                else:
+                    end_idx = i + 1
+            if end_idx != 0:
+                atoms = atoms[:-end_idx]
+                coordinates = coordinates[:-end_idx]
+
+        atom_vec = torch.from_numpy(self.dictionary.vec_index(atoms)).long()  # 根据字典的原子进行编码
+
+        if self.normalize_coords:
+            coordinates = coordinates - coordinates.mean(axis=0)
+
+        if self.add_special_token:
+            atom_vec = torch.cat([torch.LongTensor([self.bos]), atom_vec, torch.LongTensor([self.eos])])
+            coordinates = np.concatenate([np.zeros((1, 3)), coordinates, np.zeros((1, 3))], axis=0)
+
+        ## obtain edge types; which is defined as the combination of two atom types
+        edge_type = atom_vec.view(-1, 1) * self.num_types + atom_vec.view(1, -1)
+        dist = distance_matrix(coordinates, coordinates).astype(np.float32)
+        coordinates, dist = torch.from_numpy(coordinates), torch.from_numpy(dist)
+        return atom_vec, coordinates, edge_type, dist
+
 
     def filter_for_training(self) -> None:
         self.list_data_dict = [raw for raw in self.list_data_dict if raw['metadata']['split'] == 'train']
@@ -198,16 +220,14 @@ class ForwardPredDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
         ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Forward Prediction==",
-            data_file,
-            **kargs
+            data_file
         )
         self.add_selfies = add_selfies
         self.for_test = for_test
@@ -219,12 +239,6 @@ class ForwardPredDataset(MetaGraphDataset):
         # 2. Get instruction, input selfies, output selfies
         instruction = raw['instruction']
         inputs, output_selfies = raw['input'].split('.'), raw['output']
-        if self.if_smiles:
-            inputs_mol = self.selfies2smiles(raw['input'])
-            output_mol = self.selfies2smiles(raw['output'])  
-        else:
-            inputs_mol = raw['input']
-            output_mol = raw['output']
         
         # 3. Convert to Graph
         reactant_smiles = self.selfies2smiles(inputs[0])
@@ -232,7 +246,7 @@ class ForwardPredDataset(MetaGraphDataset):
 
         # 4. Add SELFIES
         if self.add_selfies:
-            instruction += " " + inputs_mol
+            instruction += " " + raw['input']
         elif len(inputs) > 1:
             instruction += f" The other joint reactants are: {','.join(inputs[1:])}"
             
@@ -240,13 +254,13 @@ class ForwardPredDataset(MetaGraphDataset):
         
         # test routine
         if self.for_test:
-            return self._yield_prompt(instruction, graph_for_first_reactant, output_mol)
+            return self._yield_prompt(instruction, graph_for_first_reactant, output_selfies)
         
         # 5. Prepare conversations
         messages = [
             [
                 {"from": "human", "value": instruction},
-                {"from": "gpt", "value": output_mol}
+                {"from": "gpt", "value": output_selfies}
             ]
         ]
 
@@ -271,16 +285,14 @@ class ReagentPredDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Reagent Prediction==",
-            data_file,
-            **kargs
+            data_file
         )
         
         self.add_selfies = add_selfies
@@ -306,34 +318,25 @@ class ReagentPredDataset(MetaGraphDataset):
         input, output_selfies = raw['input'], raw['output']
         # input: "reactant>>product"
         reactant, product = input.split(">>")
-        if self.if_smiles:
-            reactant_mol = self.selfies2smiles(reactant)
-            product_mol = self.selfies2smiles(product)
-            output_mol = self.selfies2smiles(raw['output'])
-        else:
-            reactant_mol = reactant
-            product_mol = product
-            output_mol = raw['output']
-            
         # convert input selfies to smiles for building graph
         reactant_smiles = self.selfies2smiles(reactant)
         if not self.add_selfies:
             # insert product to the instruction end
-            instruction = self.construct_instruct_question(product_mol)
+            instruction = self.construct_instruct_question(product)
         else:
-            instruction = raw['instruction'] + f" The reaction is {'>>'.join([reactant_mol,product_mol])}"
+            instruction = raw['instruction'] + f" The reaction is {input}"
 
         instruction = "<image>\n" + instruction
         
         graph=smiles2graph(reactant_smiles)
         
         if self.for_test:
-            return self._yield_prompt(instruction, graph, output_mol)
+            return self._yield_prompt(instruction, graph, output_selfies)
             
         messages = [
             [
                 {"from": "human", "value": instruction},
-                {"from": "gpt", "value": output_mol}
+                {"from": "gpt", "value": output_selfies}
             ]
         ]
 
@@ -357,16 +360,14 @@ class RetrosynDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Retrosynthesis==",
-            data_file,
-            **kargs
+            data_file
         )
         self.add_selfies = add_selfies
         self.for_test = for_test
@@ -374,15 +375,8 @@ class RetrosynDataset(MetaGraphDataset):
     def __getitem__(self, i) -> dict[str, torch.Tensor]:
         raw = self.list_data_dict[i]
         instruction = raw['instruction']
-        if self.if_smiles:
-            inputs_mol = self.selfies2smiles(raw['input'])
-            output_mol = self.selfies2smiles(raw['output'])  
-        else:
-            inputs_mol = raw['input']
-            output_mol = raw['output']
         if self.add_selfies:
-            instruction += f" The product is: {inputs_mol}"
-        
+            instruction += f" The product is: {raw['input']}"
 
         instruction = "<image>\n" + instruction
         
@@ -393,12 +387,12 @@ class RetrosynDataset(MetaGraphDataset):
         graph=smiles2graph(reactant_smiles)
         
         if self.for_test:
-            return self._yield_prompt(instruction, graph, output_mol)
+            return self._yield_prompt(instruction, graph, output_selfies)
             
         messages = [
             [
                 {"from": "human", "value": instruction},
-                {"from": "gpt", "value": output_mol}
+                {"from": "gpt", "value": output_selfies}
             ]
         ]
 
@@ -421,16 +415,14 @@ class PropertyPredDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==HOMO LUMO==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -438,12 +430,8 @@ class PropertyPredDataset(MetaGraphDataset):
     def __getitem__(self, i) -> dict[str, torch.Tensor]:
         raw = self.list_data_dict[i]
         instruction = raw['instruction']
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
         if self.add_selfies:
-            instruction += f" The compound sequence is: {input_mol}"
+            instruction += f" The compound SELFIES sequence is: {raw['input']}"
 
         instruction = "<image>\n" + instruction
         
@@ -527,10 +515,11 @@ class MolcapDataset(MetaGraphDataset):
         # instruction = "What is the name of this molecule?"
         input = raw['input']
         output = raw['output']
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
+        # if self.if_smiles:
+        #     input_mol = self.selfies2smiles(raw['input'])
+        # else:
+        #     input_mol = raw['input']
+        input_mol = raw['input']
         
         if self.add_selfies:
             instruction += f" The compound sequence is: {input_mol}"
@@ -570,16 +559,14 @@ class CatalystPredDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Catalyst Prediction dataset==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -589,19 +576,11 @@ class CatalystPredDataset(MetaGraphDataset):
         input, output_selfies = raw['input'], raw['output']
         # input: "reactant>>product"
         reactant, product = input.split(">>")
-        if self.if_smiles:
-            reactant_mol = self.selfies2smiles(reactant)
-            product_mol = self.selfies2smiles(product)
-            output_mol = self.selfies2smiles(raw['output'])
-        else:
-            reactant_mol = reactant
-            product_mol = product
-            output_mol = raw['output']
         # convert input selfies to smiles for building graph
         reactant_smiles = self.selfies2smiles(reactant)
         if self.add_selfies:
             # insert product to the instruction end
-            instruction = raw['instruction'] + f" The reaction is {'>>'.join([reactant_mol,product_mol])}."
+            instruction = raw['instruction'] + f" The reaction is {input}."
         else:
             instruction = raw['instruction']
 
@@ -609,12 +588,12 @@ class CatalystPredDataset(MetaGraphDataset):
         graph = smiles2graph(reactant_smiles)
         
         if self.for_test:
-            return self._yield_prompt(instruction, graph, output_mol)
+            return self._yield_prompt(instruction, graph, output_selfies)
 
         messages = [
             [
                 {"from": "human", "value": instruction},
-                {"from": "gpt", "value": output_mol}
+                {"from": "gpt", "value": output_selfies}
             ]
         ]
 
@@ -637,16 +616,14 @@ class SolventPredDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Solvent Prediction dataset==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -656,19 +633,11 @@ class SolventPredDataset(MetaGraphDataset):
         input, output_selfies = raw['input'], raw['output']
         # input: "reactant>>product"
         reactant, product = input.split(">>")
-        if self.if_smiles:
-            reactant_mol = self.selfies2smiles(reactant)
-            product_mol = self.selfies2smiles(product)
-            output_mol = self.selfies2smiles(raw['output'])
-        else:
-            reactant_mol = reactant
-            product_mol = product
-            output_mol = raw['output']
         # convert input selfies to smiles for building graph
         reactant_smiles = self.selfies2smiles(reactant)
         if self.add_selfies:
             # insert product to the instruction end
-            instruction = raw['instruction'] + f" The reaction is {'>>'.join([reactant_mol,product_mol])}."
+            instruction = raw['instruction'] + f" The reaction is {input}."
         else:
             instruction = raw['instruction']
         # elif len(input) > 1:
@@ -680,12 +649,12 @@ class SolventPredDataset(MetaGraphDataset):
         graph = smiles2graph(reactant_smiles)
         
         if self.for_test:
-            return self._yield_prompt(instruction, graph, output_mol)
+            return self._yield_prompt(instruction, graph, output_selfies)
 
         messages = [
             [
                 {"from": "human", "value": instruction},
-                {"from": "gpt", "value": output_mol}
+                {"from": "gpt", "value": output_selfies}
             ]
         ]
 
@@ -709,16 +678,14 @@ class YieldRegressionDataset(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Yield Regression dataset==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -728,18 +695,11 @@ class YieldRegressionDataset(MetaGraphDataset):
         input, output_selfies = raw['input'], raw['output']
         # input: "reactant>>product"
         reactant, product = input.split(">>")
-        if self.if_smiles:
-            reactant_mol = self.selfies2smiles(reactant)
-            product_mol = self.selfies2smiles(product)
-        else:
-            reactant_mol = reactant
-            product_mol = product
-
         # convert input selfies to smiles for building graph
         reactant_smiles = self.selfies2smiles(reactant)
         if self.add_selfies:
             # insert product to the instruction end
-            instruction = raw['instruction'] + f" The reaction is {'>>'.join([reactant_mol,product_mol])}."
+            instruction = raw['instruction'] + f" The reaction is {input}."
         else:
             instruction = raw['instruction']
 
@@ -775,16 +735,14 @@ class ExpProcedurePrediction(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ) -> None:
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Experimental Procedure Prediction dataset==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -812,20 +770,8 @@ class ExpProcedurePrediction(MetaGraphDataset):
         # 将所有SMILES用"."连接，形成一个字符串
         smiles = ".".join(smiles_list)
 
-        if self.if_smiles:
-            # instruction = "Reactants: "
-            # for idx, k in enumerate(placeholder_to_smiles):
-            #     if idx == len(placeholder_to_smiles) - 1:
-            #         idx_ = -1
-            #         instruction += f"${idx_}$: [START_SMILES]{placeholder_to_smiles[f"${idx_}$"]}[END_SMILES]"
-            #     else:
-            #         instruction += f"${idx}$: [START_SMILES]{placeholder_to_smiles[f"${idx}$"]}[END_SMILES]"
-            input, output_selfies = convert_selfies_to_smiles(raw['input']), raw['output']
-            
-        else:
-            # 使用raw["input"]和raw["output"]构造instruction
-            input, output_selfies = raw['input'], raw['output']
-        
+        # 使用raw["input"]和raw["output"]构造instruction
+        input, output_selfies = raw['input'], raw['output']
         instruction = raw['instruction'] + f"{input}. "
         instruction += "The Action Sequence: "
         instruction = "<image>\n" + instruction
@@ -863,16 +809,14 @@ class SCFPrediction(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ):
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==SCF Prediction==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -884,14 +828,9 @@ class SCFPrediction(MetaGraphDataset):
         instruction = raw["instruction"]
         mol = raw["input"]
         output = raw["output"]
-
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
-
+        
         if self.add_selfies:
-            instruction += f" The molecule sequence is: {input_mol}"
+            instruction += f" The molecule SELFIES sequence is: {mol}"
 
         instruction = "<image>\n" + instruction
         
@@ -926,16 +865,14 @@ class LogPPrediction(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ):
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==LogP Prediction==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -947,14 +884,9 @@ class LogPPrediction(MetaGraphDataset):
         instruction = raw["instruction"]
         mol = raw["input"]
         output = raw["output"]
-
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
         
         if self.add_selfies:
-            instruction += f" The molecule sequence is: {input_mol}"
+            instruction += f" The molecule SELFIES sequence is: {mol}"
 
         instruction = "<image>\n" + instruction
         graph = smiles2graph(self.selfies2smiles(mol))
@@ -988,16 +920,14 @@ class DescriptionQA(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ):
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Description QA==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -1010,14 +940,9 @@ class DescriptionQA(MetaGraphDataset):
         mol = raw["input"]
         to_graph = mol.split(".")[0]
         output = raw["output"]
-
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
         
         if self.add_selfies:
-            instruction += f" The compound sequence is: {input_mol}"
+            instruction += f" The compound SELFIES sequence is: {mol}"
 
         instruction = "<image>\n" + instruction
         graph = smiles2graph(self.selfies2smiles(to_graph))
@@ -1050,16 +975,14 @@ class WeightPrediction(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ):
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Weight Prediction==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -1071,14 +994,9 @@ class WeightPrediction(MetaGraphDataset):
         instruction = raw["instruction"]
         mol = raw["input"]
         output = raw["output"]
-
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
         
         if self.add_selfies:
-            instruction += f" The molecule sequence is: {input_mol}"
+            instruction += f" The molecule SELFIES sequence is: {mol}"
 
         instruction = "<image>\n" + instruction
         graph = smiles2graph(self.selfies2smiles(mol))
@@ -1112,16 +1030,14 @@ class TPSAPrediction(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ):
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Topological Polar Surface Area==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -1134,14 +1050,9 @@ class TPSAPrediction(MetaGraphDataset):
         mol = raw["input"]
         to_graph = mol.split(".")[0]
         output = raw["output"]
-
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
         
         if self.add_selfies:
-            instruction += f" The compound sequence is: {input_mol}"
+            instruction += f" The compound SELFIES sequence is: {mol}"
 
         instruction = "<image>\n" + instruction
         graph = smiles2graph(self.selfies2smiles(to_graph))
@@ -1176,16 +1087,14 @@ class ComlexityPrediction(MetaGraphDataset):
         tokenizer: PreTrainedTokenizer,
         add_selfies: bool,
         for_test: bool,
-        data_file: list[dict] = None,
-        **kargs
+        data_file: list[dict] = None
     ):
         super().__init__(
             data_path,
             tokenizer,
             for_test,
             "==Complexity==",
-            data_file,
-            **kargs
+            data_file
         )
         self.for_test = for_test
         self.add_selfies = add_selfies
@@ -1199,13 +1108,8 @@ class ComlexityPrediction(MetaGraphDataset):
         to_graph = mol.split(".")[0]
         output = raw["output"]
         
-        if self.if_smiles:
-            input_mol = self.selfies2smiles(raw['input'])
-        else:
-            input_mol = raw['input']
-
         if self.add_selfies:
-            instruction += f" The compound sequence is: {input_mol}"
+            instruction += f" The compound SELFIES sequence is: {mol}"
 
         instruction = "<image>\n" + instruction
         graph = smiles2graph(self.selfies2smiles(to_graph))
@@ -1232,7 +1136,7 @@ class ComlexityPrediction(MetaGraphDataset):
 
         return data_dict
     
-class IUPACID(MetaGraphDataset):
+class IUPAC(MetaGraphDataset):
     def __init__(
         self, 
         data_path: str,
@@ -1240,7 +1144,7 @@ class IUPACID(MetaGraphDataset):
         add_selfies: bool,
         for_test: bool,
         data_file: list[dict] = None
-    ) -> None:
+    ):
         super().__init__(
             data_path,
             tokenizer,
@@ -1248,65 +1152,155 @@ class IUPACID(MetaGraphDataset):
             "==IUPAC==",
             data_file
         )
-        
+
         self.for_test = for_test
-        self.add_selfies = add_selfies
-        
-    def maybe_drop_selfies(
-        self,
-        data_dict,
-        messages,
-        has_image
-    ):
-        if len(data_dict['input_ids']) > self.tokenizer.model_max_length:
-            logger.warning(f"input too long {len(data_dict['input_ids'])}, selfies dropped.")
-            instruction = random.choice(self.question_pool)
-            instruction = "<image>\n" + instruction
-            messages[0][0]["value"] = instruction
-            data_dict = apply_chat_template(messages, self.tokenizer, has_image=has_image)
-            data_dict = dict(input_ids=data_dict["input_ids"][0],
-                            labels=data_dict["labels"][0])
-            logger.warning(f"Adjusted length {len(data_dict['input_ids'])}")
-            
-        return data_dict
-        
-        
+        # self.add_selfies = add_selfies
+
     def __getitem__(self, i) -> dict[str, torch.Tensor]:
         raw = self.list_data_dict[i]
         instruction = raw['instruction']
-        # instruction = "What is the name of this molecule?"
-        input = raw['input']
-        output = raw['output']
-        
-        if self.add_selfies:
-            instruction += f" The compound sequence is: {input}"
+        # if self.add_selfies:
+        #     instruction += f" The compound SELFIES sequence is: {raw['input']}"
 
-        instruction = "<image>\n" + instruction
-        
-        graph = smiles2graph(self.selfies2smiles(input))
-        
+        # instruction = "<image>\n" + instruction
+    
+        iupac, output_selfies = raw['input'], raw['output']
+        instruction += f" The IUPAC name is: {iupac}" 
+        graph = None
+        # graph=smiles2graph(self.selfies2smiles(input_selfies))
+    
         if self.for_test:
-            return self._yield_prompt(instruction, graph, output)
+            return self._yield_prompt(instruction, graph, output_selfies)
         
         messages = [
             [
                 {"from": "human", "value": instruction},
-                {"from": "gpt", "value": output}
+                {"from": "gpt", "value": output_selfies}
             ]
         ]
 
         data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
         data_dict = dict(input_ids=data_dict["input_ids"][0],
-                            labels=data_dict["labels"][0])
+                        labels=data_dict["labels"][0])
+
+        data_dict['graphs'] = graph
+
+        data_dict["this_task_ids"] = torch.LongTensor([15])
+    
+        return data_dict
         
-        data_dict = self.maybe_drop_selfies(data_dict, messages, has_image=(graph is not None))
+class TextGuidedMolGen(MetaGraphDataset):
+    def __init__(
+        self, 
+        data_path: str,
+        tokenizer: PreTrainedTokenizer,
+        add_selfies: bool,
+        for_test: bool,
+        data_file: list[dict] = None
+    ):
+        super().__init__(
+            data_path,
+            tokenizer,
+            for_test,
+            "==Text Guided Mol Gen==",
+            data_file
+        )
+
+        self.for_test = for_test
+        # self.add_selfies = add_selfies
+
+    def __getitem__(self, i) -> dict[str, torch.Tensor]:
+        raw = self.list_data_dict[i]
+        instruction = raw['instruction']
+        # if self.add_selfies:
+        #     instruction += f" The compound SELFIES sequence is: {raw['input']}"
+
+        # instruction = "<image>\n" + instruction
+    
+        desc, output_selfies = raw['input'], raw['output']
+        instruction += f" The description is: {desc}" 
+        graph = None
+        # graph=smiles2graph(self.selfies2smiles(input_selfies))
+    
+        if self.for_test:
+            return self._yield_prompt(instruction, graph, output_selfies)
         
-        assert graph is not None, f"Cannot convert {input} to graph"
+        messages = [
+            [
+                {"from": "human", "value": instruction},
+                {"from": "gpt", "value": output_selfies}
+            ]
+        ]
+
+        data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
+        data_dict = dict(input_ids=data_dict["input_ids"][0],
+                        labels=data_dict["labels"][0])
+
+        # assert graph is not None, "Cannot convert to graph"
+        data_dict['graphs'] = graph
+        assert -200 not in data_dict["input_ids"]
+        data_dict["this_task_ids"] = torch.LongTensor([16])
+    
+        return data_dict
+        
+        
+class MolEditing(MetaGraphDataset):
+    def __init__(
+        self, 
+        data_path: str,
+        tokenizer: PreTrainedTokenizer,
+        add_selfies: bool,
+        for_test: bool,
+        data_file: list[dict] = None
+    ):
+        super().__init__(
+            data_path,
+            tokenizer,
+            for_test,
+            "==molecular editing==",
+            data_file
+        )
+
+        self.for_test = for_test
+        self.add_selfies = add_selfies
+
+    def __getitem__(self, i) -> dict[str, torch.Tensor]:
+        raw = self.list_data_dict[i]
+        instruction = raw['instruction']
+        if self.add_selfies:
+            instruction += f" The compound SELFIES sequence is: {raw['input']}"
+
+        instruction = "<image>\n" + instruction
+    
+        input_selfies, output_selfies = raw['input'], raw['output']
+        # instruction += f" The description is: {desc}" 
+        # graph = None
+        graph=smiles2graph(self.selfies2smiles(input_selfies))
+    
+        if self.for_test:
+            return self._yield_prompt(instruction, graph, output_selfies)
+        
+        messages = [
+            [
+                {"from": "human", "value": instruction},
+                {"from": "gpt", "value": output_selfies}
+            ]
+        ]
+
+        data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
+        data_dict = dict(input_ids=data_dict["input_ids"][0],
+                        labels=data_dict["labels"][0])
+
+        assert graph is not None, f"Cannot convert {input_selfies} to graph"
         data_dict['graphs'] = graph
         assert -200 in data_dict["input_ids"]
-        data_dict["this_task_ids"] = torch.LongTensor([4])
-
+        data_dict["this_task_ids"] = torch.LongTensor([17])
+    
         return data_dict
+        
 
 NAME2DATASET = {
     "pubchem": PretrainMolDataset,
@@ -1325,7 +1319,9 @@ NAME2DATASET = {
     "weight": WeightPrediction,
     "dqa": DescriptionQA,
     "logp": LogPPrediction,
-    "iupac": IUPACID
+    "iupac": IUPAC,
+    "textguidedmolgen": TextGuidedMolGen,
+    "molediting": MolEditing
 }
 
 MAP2FILEMAME = {
@@ -1338,14 +1334,17 @@ MAP2FILEMAME = {
     "solvent": "solvent",
     "catalyst": "catalyst",
     "yield": "yields_regression",
-    "experiment": "exp_procedure",
-    "scf": "3d_moit",
+    "experiment": "exp_procedure_pred_0.5subset",
+    "scf": "scf_0.25subset",
     "complexity": "3d_moit",
     "tpsa": "3d_moit",
     "weight": "3d_moit",
     "dqa": "3d_moit",
     "logp": "3d_moit",
-    "iupac" : "selfies2iupac"
+    # "iupac": "iupac2selfies",
+    "iupac": "iupac_0.2subset",
+    "textguidedmolgen": "text_guided",
+    "molediting": "molecule_editing"
 }
 
 def build_dataset(
@@ -1358,7 +1357,7 @@ def build_dataset(
     task_config: str = None, 
     sample_from_ratio: str = None,
     total_size: int = None,
-    if_smiles: bool = False,
+    **kwargs
 ) -> Dataset:
     # task_name or sample_from_ratio: forward:0.3/reagent:0.5/...
     # however, sample from ratio should satisfy sum(ratio) = 1
@@ -1381,8 +1380,7 @@ def build_dataset(
                 tokenizer,
                 add_selfies,
                 for_test,
-                data_file=None,
-                if_smiles=if_smiles
+                data_file=None
             )
             
             task_dataset, _ = random_split(task_dataset, [ratio, 1-ratio])
@@ -1407,8 +1405,7 @@ def build_dataset(
                 tokenizer,
                 add_selfies,
                 for_test,
-                data_file=None,
-                if_smiles=if_smiles
+                data_file=None
             )
             size = total_size * proportion
             if size > len(task_dataset):

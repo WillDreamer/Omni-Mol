@@ -12,14 +12,14 @@ GRAPH_TOWER="moleculestm"
 INIT_CHECKPOINT_GNN="assets/moleculestm.pth"
 
 CHECKPOINT_FOLDER_PREFIX="_checkpoints"
-TASK="forward:1/retrosynthesis:1/reagent:1/homolumo:1/molcap:1/solvent:1/catalyst:1/yield:1"
-# TASK="forward:1/retrosynthesis:1/reagent:1/homolumo:1/molcap:1/solvent:1/catalyst:1/yield:1/experiment:1/tpsa:1/weight:1/dqa:1/logp:1/iupac:1/textguidedmolgen:1/molediting:1"
+# TASK="forward:1/retrosynthesis:1/reagent:1/homolumo:1/molcap:1/solvent:1/catalyst:1/yield:1"
+TASK="forward:1/retrosynthesis:1/reagent:1/homolumo:1/molcap:1/solvent:1/catalyst:1/yield:1/experiment:1/tpsa:1/weight:1/dqa:1/logp:1/iupac:1/textguidedmolgen:1/molediting:1"
 PROJECTOR="naive_linear"
-REMARK="1B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-8tasks"
+REMARK="1B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-16tasks"
 
 export WANDB_ENTITY="Omni-Mol"
-export WANDB_PROJECT="${WANDB_ENTITY}_${WANDB_PROMPT_VERSION}"
-export WANDB_API_KEY="xxxxxx"
+export WANDB_PROJECT="${WANDB_ENTITY}_SMILES_${WANDB_PROMPT_VERSION}"
+export WANDB_API_KEY="ba70fcbc92808cc7a1750dd80ac3908295e6854f"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 echo "========== Start Training =========="
@@ -41,8 +41,8 @@ deepspeed --master_port 29505 train.py \
     --bf16 True \
     --output_dir $CHECKPOINT_FOLDER_PREFIX/$MODEL_VERSION-$REMARK \
     --num_train_epochs 15 \
-    --per_device_train_batch_size 12 \
-    --per_device_eval_batch_size 12 \
+    --per_device_train_batch_size 28 \
+    --per_device_eval_batch_size 28 \
     --gradient_accumulation_steps 1 \
     --stop_epoch 12 \
     --eval_strategy "no" \
@@ -73,7 +73,8 @@ deepspeed --master_port 29505 train.py \
     --top_k_experts 2 \
     --use_task_loss False \
     --ddp_find_unused_parameters False \
-    --norm_topk_prob False
+    --norm_topk_prob False \
+    --if_smiles True \
 
 echo "========== Training Finished =========="
 
