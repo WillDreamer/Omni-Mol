@@ -12,10 +12,11 @@ GRAPH_TOWER="moleculestm"
 INIT_CHECKPOINT_GNN="assets/moleculestm.pth"
 
 CHECKPOINT_FOLDER_PREFIX="_checkpoints"
+MODEL_PATH="meta-llama/Llama-3.2-1B-Instruct"
 # TASK="forward:1/retrosynthesis:1/reagent:1/homolumo:1/molcap:1/solvent:1/catalyst:1/yield:1"
 TASK="forward:1/retrosynthesis:1/reagent:1/homolumo:1/molcap:1/solvent:1/catalyst:1/yield:1/experiment:1/tpsa:1/weight:1/dqa:1/logp:1/iupac:1/textguidedmolgen:1/molediting:1"
 PROJECTOR="naive_linear"
-REMARK="1B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-16tasks"
+REMARK="3B-deepseek-moe-5EP-qurater-sharedEP-clip-alpha-embed-Tok2-16tasks"
 
 export WANDB_ENTITY="Omni-Mol"
 export WANDB_PROJECT="${WANDB_ENTITY}_SMILES_${WANDB_PROMPT_VERSION}"
@@ -28,8 +29,8 @@ deepspeed --master_port 29505 train.py \
     --training_recipe loramoe \
     --use_alpha True \
     --task_config $TASK \
-    --model_name_or_path meta-llama/Llama-3.2-1B-Instruct \
-    --base_model meta-llama/Llama-3.2-1B-Instruct \
+    --model_name_or_path $MODEL_PATH \
+    --base_model $MODEL_PATH \
     --language_backbone_name $MODEL_VERSION \
     --version $PROMPT_VERSION \
     --data_path data/train \
@@ -41,10 +42,10 @@ deepspeed --master_port 29505 train.py \
     --bf16 True \
     --output_dir $CHECKPOINT_FOLDER_PREFIX/$MODEL_VERSION-$REMARK \
     --num_train_epochs 15 \
-    --per_device_train_batch_size 28 \
-    --per_device_eval_batch_size 28 \
+    --per_device_train_batch_size 20 \
+    --per_device_eval_batch_size 20 \
     --gradient_accumulation_steps 1 \
-    --stop_epoch 12 \
+    --stop_epoch 15 \
     --eval_strategy "no" \
     --eval_steps 500 \
     --split_eval False \
@@ -96,7 +97,7 @@ accelerate launch --main_process_port 29533 auto_eval.py \
     --model_type lora+moe \
     --prompt_version llama3 \
     --model_path $CHECKPOINT_FOLDER_PREFIX/$MODEL_VERSION-$REMARK \
-    --language_backbone meta-llama/Llama-3.2-1B-Instruct \
+    --language_backbone $MODEL_PATH \
     --graph_path assets/moleculestm.pth \
     --use_flash_attn True \
     --task_embed False \
