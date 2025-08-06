@@ -69,20 +69,22 @@ def convert_to_canonical_smiles(smiles: str) -> str | None:
         
     return None
 
-def build_evaluate_tuple(result:dict):
-    result["pred_smi"] = convert_to_canonical_smiles(sf_encode(result["pred"]))
-    result["gt_smi"] = convert_to_canonical_smiles(sf_encode(result["gt"]))
+def build_evaluate_tuple(result: dict, is_smiles: bool):
+    encode = sf_encode if not is_smiles else lambda x: x  # skip selfies encode if already using SMILES
+    result["pred_smi"] = convert_to_canonical_smiles(encode(result["pred"]))
+    result["gt_smi"] = convert_to_canonical_smiles(encode(result["gt"]))
     
     return result
 
 
-def calc_fingerprints(input_file: str, save_path=None, morgan_r: int=2, eos_token='<|end|>'):
+
+def calc_fingerprints(input_file: str, save_path=None, morgan_r: int=2, eos_token='<|end|>', is_smiles=False):
     outputs = []
     ans_file = load_json(input_file)
     
     for result in ans_file:
         result['pred'] = result['pred'].split(eos_token)[0]
-        result = build_evaluate_tuple(result)
+        result = build_evaluate_tuple(result, is_smiles)
         gt_m = Chem.MolFromSmiles(result['gt_smi'])
         try:
             ot_m = Chem.MolFromSmiles(result['pred_smi'])
@@ -132,13 +134,13 @@ def calc_fingerprints(input_file: str, save_path=None, morgan_r: int=2, eos_toke
     return new_metrics
         
         
-def calc_mol_trans(input_file, metric_path=None, eos_token='<|end|>'):
+def calc_mol_trans(input_file, metric_path=None, eos_token='<|end|>', is_smiles=False):
     outputs = []
     ans_file = load_json(input_file)
     bad_mols = 0
     for result in ans_file:
         result['pred'] = result['pred'].split(eos_token)[0]
-        result = build_evaluate_tuple(result)
+        result = build_evaluate_tuple(result, is_smiles)
         if result['pred_smi'] is not None:
             outputs.append((result['prompt'], result['gt'], result['pred'], result['gt_smi'], result['pred_smi']))
         else:
@@ -729,8 +731,8 @@ def calc_iupac_metrics(input_file, metric_path, eos_token, tokenizer: PreTrained
 
 
 if __name__ == "__main__":
-    file_path = "/Users/hikari/Downloads/forward_pred-lora-llama3-moleculestm-naive_linear-llama3-1b-lora-forward_pred-answer.json"
-    calc_fingerprints(file_path, eos_token='<|eot_id|>')
-    calc_mol_trans(file_path, eos_token='<|eot_id|>')
+    file_path = "/root/autodl-tmp/Omni-Mol/smiles/1B-deepseek-moe-5expert-second-quarter-sharedEP-clip-alpha-embed-Tok2-smiles-4GPUs-Epoch14/forward-lora+moe-llama3-answer.json"
+    calc_fingerprints(file_path, eos_token='<|eot_id|>', is_smiles=True)
+    calc_mol_trans(file_path, eos_token='<|eot_id|>', is_smiles=True)
     
     
