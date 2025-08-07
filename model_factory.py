@@ -780,7 +780,7 @@ def load_moe_lora_model_sequential(
         if any(keyword in name.lower() for keyword in ['mm_projector','lora', 'moe', 'expert', 'lm_head']):
             param.requires_grad = True
         else:
-            param.requires_grad = False  # 可选：其余参数显式冻结
+            param.requires_grad = False 
     model.enable_input_require_grads()  
     return tokenizer, model
 
