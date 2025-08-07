@@ -322,7 +322,7 @@ def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token
     float_conversion_error_samples = []
 
     if not os.path.exists(eval_result_file):
-        print(f"输入文件不存在: {eval_result_file}")
+        print(f"File not exists{eval_result_file}")
         return
 
     with open(eval_result_file, 'r', encoding='utf-8') as f:
