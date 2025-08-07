@@ -214,7 +214,6 @@ def compute_mae(eval_result_file: str, metric_path: str, eos_token: str):
                 error_count += 1
                 continue
 
-            # 根据 prompt 判断归属，并将数据存入对应列表
             if "HOMO" in prompt and "LUMO" not in prompt:
                 data_dict["homo_gts"].append(gt_val)
                 data_dict["homo_preds"].append(pred_val)
@@ -225,10 +224,9 @@ def compute_mae(eval_result_file: str, metric_path: str, eos_token: str):
                 data_dict["gap_gts"].append(gt_val)
                 data_dict["gap_preds"].append(pred_val)
             else:
-                raise NotImplementedError("prompt 内容既不包含 HOMO 也不包含 LUMO，或无法识别。")
+                raise NotImplementedError("Cannot parse prompt")
             f.close()
 
-    # 当各列表中至少有一个值才能进行 MAE 计算，否则可以根据需求做相应处理
     homo_err = mean_absolute_error(data_dict["homo_gts"], data_dict["homo_preds"]) if data_dict["homo_gts"] else None
     lumo_err = mean_absolute_error(data_dict["lumo_gts"], data_dict["lumo_preds"]) if data_dict["lumo_gts"] else None
     gap_err  = mean_absolute_error(data_dict["gap_gts"],  data_dict["gap_preds"])  if data_dict["gap_gts"]  else None
@@ -241,7 +239,7 @@ def compute_mae(eval_result_file: str, metric_path: str, eos_token: str):
     print("LUMO MAE:", lumo_err)
     print("GAP MAE:", gap_err)
     print("Average:", average)
-    print("Number of skipped items (转换失败):", error_count)
+    print("Number of skipped items:", error_count)
 
     metrics_list = [
         {"HOMO MAE": homo_err},
@@ -262,30 +260,27 @@ def compute_extracted_mae(eval_result_file: str, metric_path: str, eos_token: st
         "preds": []
     }
     pattern = r"\d+(?:\.\d+)?"
-    invalid_samples = []  # 用于记录匹配失败的样例
+    invalid_samples = []
 
     with open(eval_result_file, 'r', encoding='utf-8') as f:
         results = json.load(f)
 
         for i, result in enumerate(results):
-            # 需提取数字
             pred = result['pred'].split(eos_token)[0]
             gt = result['gt']
 
             pred_nums = re.findall(pattern, pred)
             gt_nums = re.findall(pattern, gt)
 
-            # 如果 pred 或 gt 中无法匹配到数字，跳过该条数据并记录下来
             if not pred_nums or not gt_nums:
                 invalid_samples.append({
-                    "index": i,  # 或者换成你的标识
+                    "index": i,
                     "prompt": result.get("prompt", ""),
                     "pred": pred,
                     "gt": gt
                 })
                 continue
 
-            # 提取第一个匹配到的数字
             ex_pred = pred_nums[0]
             ex_gt = gt_nums[0]
 
@@ -293,16 +288,13 @@ def compute_extracted_mae(eval_result_file: str, metric_path: str, eos_token: st
             data_dict["preds"].append(float(ex_pred))
 
         f.close()
-    # 如果 data_dict 中有可用数据，才进行 MAE 计算
     if len(data_dict["gts"]) > 0 and len(data_dict["preds"]) > 0:
         mae = mean_absolute_error(data_dict["gts"], data_dict["preds"])
     else:
-        # 如果全部都无法匹配到数字，可根据需求设置一个默认值或者报错
         mae = None
 
     print("Average MAE:", mae)
 
-    # 将 MAE 与 invalid_samples 一起写入到最终的 JSON 文件
     metrics_list = [
         {"Average MAE": float(mae) if mae is not None else None},
         {"invalid_samples": invalid_samples}
@@ -314,45 +306,17 @@ def compute_extracted_mae(eval_result_file: str, metric_path: str, eos_token: st
 
 
 def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token: str, max_examples=5):
-    """
-    从eval_result_file中读取列表（内部为字典: {'gt':..., 'pred':..., ...}），
-    解析提取"SCF Energy"对应的数值，并计算MAE。
-
-    如果某条记录有以下问题，会被跳过：
-      1. pred中找不到任何符合正则的数字
-      2. gt中找不到任何符合正则的数字
-      3. 匹配到数字但转换float时失败 (ValueError)
-
-    统计各问题的出现次数，并且保存若干条出错示例（默认各保留前5条）。
-
-    最终结果写入metric_path，包括：
-      - "Average MAE"：平均绝对误差
-      - "No pred match"：pred匹配失败的数量
-      - "No gt match"：gt匹配失败的数量
-      - "Float conversion error"：float转化失败的数量
-      - 以及各类问题对应的示例
-
-    Args:
-        eval_result_file (str): 输入 JSON 文件路径。
-        metric_path (str): 结果输出 JSON 文件路径。
-        eos_token (str): 用于截断 pred 的标记。
-        max_examples (int): 每种错误类型最多保留多少条示例。
-    """
-
     data_dict = {
         "gts": [],
         "preds": [],
     }
 
-    # 能够匹配负号与科学计数法的正则表达式
     pattern = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
 
-    # 三种失败原因的计数
     no_pred_match = 0
     no_gt_match = 0
     float_conversion_error = 0
 
-    # 用于保存样本示例（只保留部分）
     no_pred_match_samples = []
     no_gt_match_samples = []
     float_conversion_error_samples = []
@@ -364,18 +328,14 @@ def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token
     with open(eval_result_file, 'r', encoding='utf-8') as f:
         results = json.load(f)
         for i, result in enumerate(results):
-            # 读取并截断pred
             pred = result.get('pred', '').split(eos_token)[0]
             gt = result.get('gt', '')
 
-            # 用正则在字符串中寻找数字
             ex_pred_list = re.findall(pattern, pred)
             ex_gt_list = re.findall(pattern, gt)
 
-            # 检查是否匹配到数字
             if not ex_pred_list:
                 no_pred_match += 1
-                # 只记录前 max_examples 条示例
                 if len(no_pred_match_samples) < max_examples:
                     no_pred_match_samples.append({
                         "index": i,
@@ -394,11 +354,9 @@ def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token
                     })
                 continue
 
-            # 获取第一个匹配到的数字（如果有多个，可以按需调整）
             ex_pred = ex_pred_list[0]
             ex_gt = ex_gt_list[0]
 
-            # 浮点转换
             try:
                 float_pred = float(ex_pred)
                 float_gt = float(ex_gt)
@@ -414,12 +372,10 @@ def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token
                     })
                 continue
 
-            # 如果都成功，加入数据列表
             data_dict["preds"].append(float_pred)
             data_dict["gts"].append(float_gt)
 
         f.close()
-    # 如果全部样本都被跳过，则无法计算MAE
     if len(data_dict["gts"]) == 0:
         print("No valid samples found. MAE cannot be computed.")
         stats_output = [{
@@ -439,7 +395,6 @@ def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token
     mae = mean_absolute_error(data_dict["gts"], data_dict["preds"])
     print("Average MAE:", mae)
 
-    # 将结果、跳过计数以及示例存入 JSON
     metrics_list = [{
         "Average MAE": float(mae),
         "No pred match": no_pred_match,
@@ -454,13 +409,10 @@ def compute_extracted_SCF_mae(eval_result_file: str, metric_path: str, eos_token
         json.dump(metrics_list, f_w, indent=4, ensure_ascii=False)
         f_w.close()
 
-    # 在控制台打印出统计和示例信息
-    print("\n统计信息")
     print(f" - No pred match: {no_pred_match}")
     print(f" - No gt match: {no_gt_match}")
     print(f" - Float conversion error: {float_conversion_error}")
 
-    # 打印前 max_examples 条示例（可以根据需要修改打印格式）
     print("\nNo pred match examples:")
     for example in no_pred_match_samples:
         print(example)
@@ -724,7 +676,7 @@ def calc_iupac_metrics(input_file, metric_path, eos_token, tokenizer: PreTrained
 
 
 if __name__ == "__main__":
-    file_path = "/Users/hikari/Downloads/forward_pred-lora-llama3-moleculestm-naive_linear-llama3-1b-lora-forward_pred-answer.json"
+    file_path = "forward_pred-lora-llama3-moleculestm-naive_linear-llama3-1b-lora-forward_pred-answer.json"
     calc_fingerprints(file_path, eos_token='<|eot_id|>')
     calc_mol_trans(file_path, eos_token='<|eot_id|>')
     
