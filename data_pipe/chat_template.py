@@ -376,8 +376,7 @@ def preprocess_phi(
     sep = conv.sep + conv.roles[1] + ": "
     # print('sep', sep)
     for conversation, target in zip(conversations, targets):
-        # NOTE(Hao Li): Since Phi-3 small use the same special toke for 
-        # BOS, EOS, PAD, we don't compare the padding token here.
+
         if tokenizer.pad_token_id == tokenizer.eos_token_id:
             total_len = target.numel()
         else:
@@ -421,13 +420,7 @@ def preprocess_phi(
                     f" (ignored)"
                 )
                 
-    # NOTE(Hao Li): Checked, compatible with Phi-3 small
-    # print(input_ids, target)
-    # print("1115 is", tokenizer.decode([1115]))
-    # print("25 is", tokenizer.decode([25]))
-    # print("2891 is", tokenizer.decode([2891]))
-    # print("3931 is", tokenizer.decode([3931]))
-    # exit(0)
+
     return dict(
         input_ids=input_ids,
         labels=targets,
