@@ -178,10 +178,6 @@ def convert_chebi20(txt, out_dir=None, add_selfies=False):
 
 
 if __name__ == '__main__':
-    # graph = smiles2graph('O1C=C[C@H]([C@H]1O2)c3c2cc(OC)c4c3OC(=O)C5=C4CCC(=O)5')
-    # print(graph)
-    # qa_json = '/comp_robot/rentianhe/caohe/AIDD/DATA/MolFM/pubcgraphemsft_desc/test.json'
-    # convert_chembl(qa_json)
     
     for split in ['train', 'test', 'validation']:
         txt = f'/cto_labs/AIDD/DATA/MolT5/ChEBI-20_data/{split}.txt'
