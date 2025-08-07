@@ -7,7 +7,7 @@ import time
 
 total_sleep = int(60 * 60 * 3)
 start_time = time.time()
-with tqdm(total=total_sleep, desc="休眠进度", unit="秒") as pbar:
+with tqdm(total=total_sleep, desc="Sleep", unit="s") as pbar:
     while True:
         elapsed = time.time() - start_time
         if elapsed >= total_sleep:
@@ -16,7 +16,7 @@ with tqdm(total=total_sleep, desc="休眠进度", unit="秒") as pbar:
         pbar.update(1)
 print('Start!')
 
-client = OpenAI(api_key="sk-15723287f95b42448a3ea4ef84a2bf85", base_url="https://api.deepseek.com")
+client = OpenAI(api_key="", base_url="https://api.deepseek.com")
 task = 'forward'
 save_name = f'{task}_in_context_answer.json'
 file_name = f"{task}_in_context_data.json"
@@ -52,6 +52,6 @@ for index, item in enumerate(tqdm(data)):
         "pred":response
     })
 
-# 保存 in-context 数据到文件（可选）
+
 with open(save_name, "w", encoding="utf-8") as f:
     json.dump(in_context_data, f, ensure_ascii=False, indent=2)
