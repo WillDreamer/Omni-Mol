@@ -42,23 +42,19 @@ def apply_prompt(message):
 
 def convert_selfies_to_smiles(input_str):
     def replace_selfies(match):
-        # 提取 SELFIES 字符串
         selfies_str = match.group(1)
-        # 将 SELFIES 转换为 SMILES
         smiles = sf.decoder(selfies_str)
         if smiles:
-            # 将 SMILES 转换为 RDKit 分子对象
             mol = Chem.MolFromSmiles(smiles)
             if mol:
-                # 生成 canonical SMILES
                 canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
                 return f'[START_SMILES]{canonical_smiles}[END_SMILES]'
-        # 如果转换失败，保持原样
+
         return match.group(0)
     
-    # 定义正则表达式模式，匹配 [START_SELFIES] 和 [END_SELFIES] 之间的内容
+
     pattern = r'\[START_SELFIES\](.*?)\[END_SELFIES\]'
-    # 替换所有匹配项
+
     modified_str = re.sub(pattern, replace_selfies, input_str)
     return modified_str
 
@@ -93,15 +89,14 @@ class MetaGraphDataset(Dataset):
         
     def selfies2smiles(self, selfies_str: str) -> str | None:
     
-        # 第一步：SELFIES 转为 SMILES
         smiles = sf.decoder(selfies_str)
-        if not smiles:  # 检查是否解码失败
+        if not smiles: 
             return None
-        # 第二步：SMILES 转为 canonical SMILES
+
         mol = Chem.MolFromSmiles(smiles)
-        if mol is None:  # 检查 RDKit 是否解析失败
+        if mol is None: 
             return smiles
-        return Chem.MolToSmiles(mol, canonical=True)  # 返回 canonical SMILES
+        return Chem.MolToSmiles(mol, canonical=True) 
             
 
     def filter_for_training(self) -> None:
@@ -789,26 +784,19 @@ class ExpProcedurePrediction(MetaGraphDataset):
         self.add_selfies = add_selfies
 
     def __getitem__(self, i) -> dict[str, torch.Tensor]:
-        # 取出数据条目
         raw = self.list_data_dict[i]
 
-        # 从raw中提取extracted_molecules字典
         extracted_molecules = raw.get("extracted_molecules", {})
 
-        # extracted_molecules是 {SMILES: "$1$"} 的形式，需要反转成 {"$1$": SMILES} 方便查询
         placeholder_to_smiles = {placeholder: smi for smi, placeholder in extracted_molecules.items()}
 
-        # 从raw["input"]中查找所有占位符（例如$1$, $2$, $-1$等）
         placeholders = re.findall(r"\$\d+\$", raw["input"])
 
-        # 收集匹配到的所有SMILES
         smiles_list = []
         for ph in placeholders:
-            # 如果该占位符在placeholder_to_smiles中，则取出对应的SMILES
             if ph in placeholder_to_smiles:
                 smiles_list.append(placeholder_to_smiles[ph])
 
-        # 将所有SMILES用"."连接，形成一个字符串
         smiles = ".".join(smiles_list)
 
         if self.if_smiles:
@@ -822,14 +810,12 @@ class ExpProcedurePrediction(MetaGraphDataset):
             input, output_selfies = convert_selfies_to_smiles(raw['input']), raw['output']
             
         else:
-            # 使用raw["input"]和raw["output"]构造instruction
             input, output_selfies = raw['input'], raw['output']
         
         instruction = raw['instruction'] + f"{input}. "
         instruction += "The Action Sequence: "
         instruction = "<image>\n" + instruction
 
-        # 根据data_args决定是用himol还是smiles2graph构造graph
         assert smiles is not None, f"Found invalid data {raw}"
         graph = smiles2graph(smiles)
         
