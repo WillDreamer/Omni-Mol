@@ -7,9 +7,7 @@ from rdkit import Chem
 from rdkit import DataStructs
 from rdkit.Chem import AllChem
 
-data_path = "/wanghaixin/OmniMol/Molecule-oriented_Instructions/evaluate/forward_reaction_prediction.json"
-# data_path = '/wanghaixin/OmniMol/Molecule-oriented_Instructions/train/reagent_prediction.json'
-# data_path = '/wanghaixin/OmniMol/Molecule-oriented_Instructions/train/retrosynthesis.json'
+data_path = "forward_reaction_prediction.json"
 save_name = "forward_in_context_data.json"
 
 def sf_encode(selfies):
@@ -45,9 +43,9 @@ dataset = load_dataset("json", data_files=data_path)
 train_dataset = dataset["train"].filter(lambda x: x["metadata"]["split"] == "train")
 test_dataset = dataset["train"].filter(lambda x: x["metadata"]["split"] == "test")
 
-# 预先遍历 train_dataset，计算每个样本的 SMILES 和指纹
-train_examples = []  # 保存有效的训练样本及其信息
-train_fps = []       # 保存对应的 Morgan 指纹
+
+train_examples = []  
+train_fps = []  
 
 print("Precomputing fingerprints for train_dataset...")
 for sample in tqdm(train_dataset):
@@ -79,22 +77,22 @@ for batch in tqdm(test_dataset):
     if test_mol is None:
         continue
     test_fp = AllChem.GetMorganFingerprint(test_mol, 2)
-    # 计算与每个 train 样本的相似度
+
     scores = []
     for fp in train_fps:
         score = DataStructs.TanimotoSimilarity(test_fp, fp)
         scores.append(score)
-    # 找出相似度最高的前5个索引
+
     top_five_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:5]
     top_train_samples = [train_examples[i] for i in top_five_indices]
     top_scores = [scores[i] for i in top_five_indices]
 
-    ## 处理top_train_samples成模板，
+
     template = ""
     for sample in top_train_samples:
         template += f"Question: The input is {sample['input']} \n {sample['instruction']} \n "
         template += f"Answer: {sample['output']}\n"
-        template += "---\n"  # 用分隔符区分不同样本
+        template += "---\n"  
     
     in_context_data.append({
         "input_mol": input_mol,
@@ -104,7 +102,7 @@ for batch in tqdm(test_dataset):
         "top_scores": top_scores
     })
 
-# 保存 in-context 数据到文件（可选）
+
 with open(save_name, "w", encoding="utf-8") as f:
     json.dump(in_context_data, f, ensure_ascii=False, indent=2)
 
