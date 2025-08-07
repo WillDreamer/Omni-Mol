@@ -50,7 +50,6 @@ class GraphDatasetCollator(object):
                 'this_task_ids': task_ids
             }
         
-        # 处理graphs - 保持原样，因为graphs可能是None的列表
         if 'graphs' in instances[0]:
             graph_batch = []
             for instance in instances:
