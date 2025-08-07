@@ -480,7 +480,6 @@ def preprocess_t5(
             input_ids[i, :len(ids)] = ids
             attention_mask[i, :len(ids)] = 1
     else:
-        # 无图像的正常tokenize
         model_inputs = tokenizer(
             inputs_list,
             return_tensors="pt",
