@@ -87,9 +87,6 @@ class MetaGraphDataset(Dataset):
     def selfies2_3dgraph(self, raw: dict) -> torch.Tensor | None:
         atoms = raw['atoms']
         coordinates = raw['coordinates']
-        """
-        此处的atoms为字符串列表, coordinates为numpy数组
-        """
         assert len(atoms) == len(coordinates) and len(atoms) > 0
         assert coordinates.shape[1] == 3
 
@@ -110,7 +107,7 @@ class MetaGraphDataset(Dataset):
                 atoms = atoms[:-end_idx]
                 coordinates = coordinates[:-end_idx]
 
-        atom_vec = torch.from_numpy(self.dictionary.vec_index(atoms)).long()  # 根据字典的原子进行编码
+        atom_vec = torch.from_numpy(self.dictionary.vec_index(atoms)).long()
 
         if self.normalize_coords:
             coordinates = coordinates - coordinates.mean(axis=0)
@@ -748,35 +745,26 @@ class ExpProcedurePrediction(MetaGraphDataset):
         self.add_selfies = add_selfies
 
     def __getitem__(self, i) -> dict[str, torch.Tensor]:
-        # 取出数据条目
         raw = self.list_data_dict[i]
 
-        # 从raw中提取extracted_molecules字典
         extracted_molecules = raw.get("extracted_molecules", {})
 
-        # extracted_molecules是 {SMILES: "$1$"} 的形式，需要反转成 {"$1$": SMILES} 方便查询
         placeholder_to_smiles = {placeholder: smi for smi, placeholder in extracted_molecules.items()}
 
-        # 从raw["input"]中查找所有占位符（例如$1$, $2$, $-1$等）
         placeholders = re.findall(r"\$\d+\$", raw["input"])
 
-        # 收集匹配到的所有SMILES
         smiles_list = []
         for ph in placeholders:
-            # 如果该占位符在placeholder_to_smiles中，则取出对应的SMILES
             if ph in placeholder_to_smiles:
                 smiles_list.append(placeholder_to_smiles[ph])
 
-        # 将所有SMILES用"."连接，形成一个字符串
         smiles = ".".join(smiles_list)
 
-        # 使用raw["input"]和raw["output"]构造instruction
         input, output_selfies = raw['input'], raw['output']
         instruction = raw['instruction'] + f"{input}. "
         instruction += "The Action Sequence: "
         instruction = "<image>\n" + instruction
 
-        # 根据data_args决定是用himol还是smiles2graph构造graph
         assert smiles is not None, f"Found invalid data {raw}"
         graph = smiles2graph(smiles)
         
