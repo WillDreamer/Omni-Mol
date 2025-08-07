@@ -87,9 +87,7 @@ class MetaGraphDataset(Dataset):
     def selfies2_3dgraph(self, raw: dict) -> torch.Tensor | None:
         atoms = raw['atoms']
         coordinates = raw['coordinates']
-        """
-        此处的atoms为字符串列表, coordinates为numpy数组
-        """
+
         assert len(atoms) == len(coordinates) and len(atoms) > 0
         assert coordinates.shape[1] == 3
 
