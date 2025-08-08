@@ -22,7 +22,10 @@ from data_pipe.datasets import (
     LogPPrediction,
     IUPAC,
     TextGuidedMolGen,
-    MolEditing
+    MolEditing,
+    BBBPDataset,
+    BACEDataset,
+    SIDERDataset
 )
 from data_pipe import conversation_lib
 from torch.utils.data import DataLoader
@@ -191,7 +194,10 @@ TASK_MAP = {
     "logp": LogPPrediction,
     "iupac": IUPAC,
     'textguidedmolgen': TextGuidedMolGen,
-    "molediting": MolEditing
+    "molediting": MolEditing,
+    "bace": BACEDataset,
+    "bbbp": BBBPDataset,
+    "sider": SIDERDataset
 }
 
 def distributed_eval(loader, model, generation_config, tokenizer):
