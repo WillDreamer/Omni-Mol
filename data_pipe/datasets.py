@@ -1478,6 +1478,252 @@ class MolEditing(MetaGraphDataset):
         data_dict["this_task_ids"] = torch.LongTensor([17])
     
         return data_dict
+    
+
+class BACEDataset(MetaGraphDataset):
+    def __init__(
+        self, 
+        data_path: str,
+        tokenizer: PreTrainedTokenizer,
+        add_selfies: bool,
+        for_test: bool,
+        data_file: list[dict] = None,
+        **kargs
+    ):
+        super().__init__(
+            data_path,
+            tokenizer,
+            for_test,
+            "==BACE dataset==",
+            data_file,
+            **kargs
+        )
+        
+        self.for_test = for_test
+        self.add_selfies = add_selfies
+        
+    def __getitem__(self, i):
+        raw = self.list_data_dict[i]
+        instruction = raw["instruction"]
+        instruction = "What are the answers of the following question? " + instruction
+        input_selfies = raw["input"]
+        
+        graph=smiles2graph(self.selfies2smiles(input_selfies))
+        if self.if_smiles:
+            input_mol = self.selfies2smiles(input_selfies)
+            instruction += f" The compound SMILES sequence is: {input_mol}"
+        else:
+            input_mol = input_selfies
+            instruction += f" The compound SELFIES sequence is: {input_mol}"
+
+        instruction = "<image>\n" + instruction     
+    
+        if self.for_test:
+            return self._yield_prompt(instruction, graph, raw["output"])
+        
+        messages = [
+            [
+                {"from": "human", "value": instruction},
+                {"from": "gpt", "value": raw["output"]}
+            ]
+        ]
+
+        data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
+        data_dict = dict(input_ids=data_dict["input_ids"][0],
+                        labels=data_dict["labels"][0])
+
+        assert graph is not None, f"Cannot convert {input_selfies} to graph"
+        data_dict['graphs'] = graph
+        assert -200 in data_dict["input_ids"]
+        data_dict["this_task_ids"] = torch.LongTensor([17])
+    
+        return data_dict
+    
+    
+class BBBPDataset(MetaGraphDataset):
+    def __init__(
+        self, 
+        data_path: str,
+        tokenizer: PreTrainedTokenizer,
+        add_selfies: bool,
+        for_test: bool,
+        data_file: list[dict] = None,
+        **kargs
+    ):
+        super().__init__(
+            data_path,
+            tokenizer,
+            for_test,
+            "==BBBP dataset==",
+            data_file,
+            **kargs
+        )
+        
+        self.for_test = for_test
+        self.add_selfies = add_selfies
+        
+    def __getitem__(self, i):
+        raw = self.list_data_dict[i]
+        instruction = raw["instruction"]
+        instruction = "What are the answers of the following question? " + instruction
+        input_selfies = raw["input"]
+        
+        graph=smiles2graph(self.selfies2smiles(input_selfies))
+        if self.if_smiles:
+            input_mol = self.selfies2smiles(input_selfies)
+            instruction += f" The compound SMILES sequence is: {input_mol}"
+        else:
+            input_mol = input_selfies
+            instruction += f" The compound SELFIES sequence is: {input_mol}"
+
+        instruction = "<image>\n" + instruction     
+    
+        if self.for_test:
+            return self._yield_prompt(instruction, graph, raw["output"])
+        
+        messages = [
+            [
+                {"from": "human", "value": instruction},
+                {"from": "gpt", "value": raw["output"]}
+            ]
+        ]
+
+        data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
+        data_dict = dict(input_ids=data_dict["input_ids"][0],
+                        labels=data_dict["labels"][0])
+
+        assert graph is not None, f"Cannot convert {input_selfies} to graph"
+        data_dict['graphs'] = graph
+        assert -200 in data_dict["input_ids"]
+        data_dict["this_task_ids"] = torch.LongTensor([17])
+    
+        return data_dict
+    
+    
+class SIDERDataset(MetaGraphDataset):
+    def __init__(
+        self, 
+        data_path: str,
+        tokenizer: PreTrainedTokenizer,
+        add_selfies: bool,
+        for_test: bool,
+        data_file: list[dict] = None,
+        **kargs
+    ):
+        super().__init__(
+            data_path,
+            tokenizer,
+            for_test,
+            "==SIDER dataset==",
+            data_file,
+            **kargs
+        )
+        
+        self.for_test = for_test
+        self.add_selfies = add_selfies
+        
+    def __getitem__(self, i):
+        raw = self.list_data_dict[i]
+        instruction = raw["instruction"]
+        instruction = "What are the answers of the following question? " + instruction
+        input_selfies = raw["input"]
+        
+        graph=smiles2graph(self.selfies2smiles(input_selfies))
+        if self.if_smiles:
+            input_mol = self.selfies2smiles(input_selfies)
+            instruction += f" The compound SMILES sequence is: {input_mol}"
+        else:
+            input_mol = input_selfies
+            instruction += f" The compound SELFIES sequence is: {input_mol}"
+
+        instruction = "<image>\n" + instruction     
+    
+        if self.for_test:
+            return self._yield_prompt(instruction, graph, raw["output"])
+        
+        messages = [
+            [
+                {"from": "human", "value": instruction},
+                {"from": "gpt", "value": raw["output"]}
+            ]
+        ]
+
+        data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
+        data_dict = dict(input_ids=data_dict["input_ids"][0],
+                        labels=data_dict["labels"][0])
+
+        assert graph is not None, f"Cannot convert {input_selfies} to graph"
+        data_dict['graphs'] = graph
+        assert -200 in data_dict["input_ids"]
+        data_dict["this_task_ids"] = torch.LongTensor([17])
+    
+        return data_dict
+    
+    
+class BACEDataset(MetaGraphDataset):
+    def __init__(
+        self, 
+        data_path: str,
+        tokenizer: PreTrainedTokenizer,
+        add_selfies: bool,
+        for_test: bool,
+        data_file: list[dict] = None,
+        **kargs
+    ):
+        super().__init__(
+            data_path,
+            tokenizer,
+            for_test,
+            "==BACE dataset==",
+            data_file,
+            **kargs
+        )
+        
+        self.for_test = for_test
+        self.add_selfies = add_selfies
+        
+    def __getitem__(self, i):
+        raw = self.list_data_dict[i]
+        instruction = raw["instruction"]
+        instruction = "What are the answers of the following question? " + instruction
+        input_selfies = raw["input"]
+        
+        graph=smiles2graph(self.selfies2smiles(input_selfies))
+        if self.if_smiles:
+            input_mol = self.selfies2smiles(input_selfies)
+            instruction += f" The compound SMILES sequence is: {input_mol}"
+        else:
+            input_mol = input_selfies
+            instruction += f" The compound SELFIES sequence is: {input_mol}"
+
+        instruction = "<image>\n" + instruction     
+    
+        if self.for_test:
+            return self._yield_prompt(instruction, graph, raw["output"])
+        
+        messages = [
+            [
+                {"from": "human", "value": instruction},
+                {"from": "gpt", "value": raw["output"]}
+            ]
+        ]
+
+        data_dict = apply_chat_template(messages, self.tokenizer, has_image=(graph is not None))
+
+        data_dict = dict(input_ids=data_dict["input_ids"][0],
+                        labels=data_dict["labels"][0])
+
+        assert graph is not None, f"Cannot convert {input_selfies} to graph"
+        data_dict['graphs'] = graph
+        assert -200 in data_dict["input_ids"]
+        data_dict["this_task_ids"] = torch.LongTensor([17])
+    
+        return data_dict
+        
+        
 
 NAME2DATASET = {
     "pubchem": PretrainMolDataset,
@@ -1498,7 +1744,10 @@ NAME2DATASET = {
     "logp": LogPPrediction,
     "iupac": IUPAC,
     "textguidedmolgen": TextGuidedMolGen,
-    "molediting": MolEditing
+    "molediting": MolEditing,
+    "bace": BACEDataset,
+    "bbbp": BBBPDataset,
+    "sider": SIDERDataset
 }
 
 MAP2FILEMAME = {
