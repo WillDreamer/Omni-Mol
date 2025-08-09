@@ -1,0 +1,2 @@
+bleu2,bleu4,epoch,meteor_score,rouge_1,rouge_2,rouge_l,step
+10.947868347167969,0.0,0,18.325233459472656,3.75,0.0,3.75,0
