@@ -1,0 +1,27 @@
+# This is a YAML example
+tune_gnn: true
+graph_only: false
+reverse_order: false
+llm_tune: "freeze"
+num_query_tokens: 28
+text_max_len: 512
+selfies_prompt: "{} "
+graphs_prompt: "<graph>"
+graph_config:
+  encoder: "stm"
+  graph_token: "<graph>"
+  gin_num_layers: 5
+  hidden_size: 300
+  gin_drop_ratio: 0.0
+  pretrained_graph_name_or_path: "gin_pretrained/graphcl_80.pth"
+lm_config:
+  pretrained_lm_name_or_path: "meta-llama/Llama-2-7b-chat-hf"
+  pretrained_tokenizer_name_or_path: "meta-llama/Llama-2-7b-chat-hf"
+graph_projector_config:
+  projector_type: "MLPMultilevelProjector"
+  no_cat: true
+  depth: 6
+  num_eos_token: 1
+  num_motifs: 73
+
+
