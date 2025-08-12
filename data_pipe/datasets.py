@@ -1770,7 +1770,9 @@ MAP2FILEMAME = {
     # "iupac" : "selfies2iupac",
     "iupac": "iupac_0.2subset",
     "textguidedmolgen": "text_guided",
-    "molediting": "molecule_editing"
+    "molediting": "molecule_editing",
+    "bbbp": "BBBP",
+    "sider": "SIDER"
 }
 
 def build_dataset(
